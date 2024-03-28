@@ -45,16 +45,26 @@ func main() {
 	parts := strings.Split(lines[0], " ")
 
 	var statusCode int
-	var statusMessage string
-	if len(parts) < 2 {
+	var statusMessage, path, responseBody string
+	if len(parts) != 3 {
 		statusCode, statusMessage = 500, "Bad Request"
-	} else if parts[1] == "/" {
-		statusCode, statusMessage = 200, "OK"
 	} else {
-		statusCode, statusMessage = 404, "Not Found"
+		path = parts[1]
+		if path == "/" {
+			statusCode, statusMessage = 200, "OK"
+		} else if strings.HasPrefix(path, "/echo/") {
+			statusCode, statusMessage = 200, "OK"
+			responseBody = path[6:]
+		} else {
+			statusCode, statusMessage = 404, "Not Found"
+		}
 	}
 
 	httpResponse := fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusMessage)
+
+	if len(responseBody) > 0 {
+		httpResponse += fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n", len(responseBody), responseBody)
+	}
 
 	bytesSent, err := connection.Write([]byte(httpResponse))
 	if err != nil {
