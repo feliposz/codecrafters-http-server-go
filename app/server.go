@@ -52,6 +52,13 @@ func main() {
 		path = parts[1]
 		if path == "/" {
 			statusCode, statusMessage = 200, "OK"
+		} else if path == "/user-agent" {
+			statusCode, statusMessage = 200, "OK"
+			for _, line := range lines {
+				if strings.HasPrefix(line, "User-Agent: ") {
+					responseBody = line[12:]
+				}
+			}
 		} else if strings.HasPrefix(path, "/echo/") {
 			statusCode, statusMessage = 200, "OK"
 			responseBody = path[6:]
