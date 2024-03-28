@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -20,12 +21,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Printf("Listening on %s\n", address)
+
 	connection, err := listener.Accept()
-	defer connection.Close()
 	if err != nil {
 		fmt.Printf("Error accepting connection: %v\n", err)
 		os.Exit(1)
 	}
+	defer connection.Close()
+
 	fmt.Printf("Client connected\n")
 
 	readBuffer := make([]byte, 2048)
@@ -36,7 +40,22 @@ func main() {
 	}
 	fmt.Printf("Read %d bytes from client\n", bytesReceived)
 
-	httpResponse := "HTTP/1.1 200 OK\r\n\r\n"
+	request := string(readBuffer[:bytesReceived])
+	lines := strings.Split(request, "\r\n")
+	parts := strings.Split(lines[0], " ")
+
+	var statusCode int
+	var statusMessage string
+	if len(parts) < 2 {
+		statusCode, statusMessage = 500, "Bad Request"
+	} else if parts[1] == "/" {
+		statusCode, statusMessage = 200, "OK"
+	} else {
+		statusCode, statusMessage = 400, "Not Found"
+	}
+
+	httpResponse := fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusMessage)
+
 	bytesSent, err := connection.Write([]byte(httpResponse))
 	if err != nil {
 		fmt.Printf("Error sending response: %v\n", err)
