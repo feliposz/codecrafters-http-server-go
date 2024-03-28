@@ -60,11 +60,8 @@ func main() {
 		}
 	}
 
-	httpResponse := fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusMessage)
-
-	if len(responseBody) > 0 {
-		httpResponse += fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n", len(responseBody), responseBody)
-	}
+	httpResponse := fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n",
+		statusCode, statusMessage, len(responseBody), responseBody)
 
 	bytesSent, err := connection.Write([]byte(httpResponse))
 	if err != nil {
