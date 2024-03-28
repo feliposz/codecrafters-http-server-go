@@ -51,7 +51,7 @@ func main() {
 	} else if parts[1] == "/" {
 		statusCode, statusMessage = 200, "OK"
 	} else {
-		statusCode, statusMessage = 400, "Not Found"
+		statusCode, statusMessage = 404, "Not Found"
 	}
 
 	httpResponse := fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusMessage)
