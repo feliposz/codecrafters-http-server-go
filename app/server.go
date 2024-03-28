@@ -15,22 +15,28 @@ func main() {
 	address := fmt.Sprintf("%s:%d", ip, port)
 
 	listener, err := net.Listen(protocol, address)
-
 	if err != nil {
 		fmt.Printf("Failed to bind to port %d\n", port)
 		os.Exit(1)
 	}
+	defer listener.Close()
 
-	fmt.Printf("Listening on %s\n", address)
+	fmt.Printf("Listening for connections on %s\n", address)
 
-	connection, err := listener.Accept()
-	if err != nil {
-		fmt.Printf("Error accepting connection: %v\n", err)
-		os.Exit(1)
+	for {
+		connection, err := listener.Accept()
+		if err != nil {
+			fmt.Printf("Error accepting connection: %v\n", err)
+		}
+		fmt.Printf("Client connected %v\n", connection.RemoteAddr())
+		go handleConnection(connection)
 	}
-	defer connection.Close()
 
-	fmt.Printf("Client connected\n")
+}
+
+func handleConnection(connection net.Conn) {
+
+	defer connection.Close()
 
 	readBuffer := make([]byte, 2048)
 	bytesReceived, err := connection.Read(readBuffer)
