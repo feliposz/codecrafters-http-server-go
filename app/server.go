@@ -189,7 +189,7 @@ func handleFileUpload(connection net.Conn, path string) (statusCode int, statusM
 
 	// TODO: use copy?
 	data := make([]byte, contentLength)
-	bytesRead, err := connection.Read(data)
+	bytesRead, err := reader.Read(data)
 	if err != nil {
 		fmt.Printf("Error reading connection stream: %v\n", err)
 		return 500, "Internal Server Error"
