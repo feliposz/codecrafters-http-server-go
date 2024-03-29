@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -58,38 +60,34 @@ func handleConnection(connection net.Conn, directory string) {
 
 	defer connection.Close()
 
-	readBuffer := make([]byte, 2048)
-	bytesReceived, err := connection.Read(readBuffer)
-	if err != nil {
-		fmt.Printf("Error reading request: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Read %d bytes from client\n", bytesReceived)
-
-	request := string(readBuffer[:bytesReceived])
-	lines := strings.Split(request, "\r\n")
-	parts := strings.Split(lines[0], " ")
+	var requestMethod, requestPath, requestVersion string
+	bytesRead, _ := fmt.Fscanf(connection, "%s %s %s\r\n", &requestMethod, &requestPath, &requestVersion)
+	fmt.Printf("Read %d bytes from client\n", bytesRead)
 
 	var statusCode int
-	var statusMessage, path, responseBody, requestFilePath string
-	if len(parts) != 3 {
+	var statusMessage, responseBody, requestFilePath string
+	if requestVersion != "HTTP/1.1" {
 		statusCode, statusMessage = 400, "Bad Request"
 	} else {
 		statusCode, statusMessage = 200, "OK"
-		path = parts[1]
-		if path == "/" {
+		if requestMethod != "GET" && requestMethod != "POST" {
+			statusCode, statusMessage = 501, "Not Implemented"
+		} else if requestPath == "/" {
 			// do nothing
-		} else if path == "/user-agent" {
+		} else if requestPath == "/user-agent" {
 			statusCode, statusMessage = 200, "OK"
-			for _, line := range lines {
+			scanner := bufio.NewScanner(connection)
+			for scanner.Scan() {
+				line := scanner.Text()
 				if strings.HasPrefix(line, "User-Agent: ") {
 					responseBody = line[12:]
+					break
 				}
 			}
-		} else if strings.HasPrefix(path, "/echo/") {
-			responseBody = path[6:]
-		} else if strings.HasPrefix(path, "/files/") {
-			requestFilePath = path[7:]
+		} else if strings.HasPrefix(requestPath, "/echo/") {
+			responseBody = requestPath[6:]
+		} else if strings.HasPrefix(requestPath, "/files/") {
+			requestFilePath = requestPath[7:]
 		} else {
 			statusCode, statusMessage = 404, "Not Found"
 		}
@@ -97,9 +95,17 @@ func handleConnection(connection net.Conn, directory string) {
 
 	if len(requestFilePath) > 0 {
 		fullFilePath := filepath.Join(directory, requestFilePath)
-		statusCode, statusMessage = handleFileRequest(connection, fullFilePath)
-		if statusCode == 200 {
-			return
+		switch requestMethod {
+		case "GET":
+			statusCode, statusMessage = handleFileRequest(connection, fullFilePath)
+			if statusCode == 200 {
+				return
+			}
+		case "POST":
+			statusCode, statusMessage = handleFileUpload(connection, fullFilePath)
+			if statusCode == 200 {
+				return
+			}
 		}
 	}
 
@@ -143,6 +149,7 @@ func handleFileRequest(connection net.Conn, path string) (statusCode int, status
 		fmt.Printf("Error sending response: %v\n", err)
 	}
 
+	// TODO: use copy?
 	file.Seek(0, io.SeekStart)
 	data := make([]byte, size)
 	_, err = file.Read(data)
@@ -157,4 +164,38 @@ func handleFileRequest(connection net.Conn, path string) (statusCode int, status
 	fmt.Printf("Served file %s to client\n", path)
 
 	return
+}
+
+func handleFileUpload(connection net.Conn, path string) (statusCode int, statusMessage string) {
+	file, err := os.Create(path)
+	if err != nil {
+		return 500, "Internal Server Error"
+	}
+	defer file.Close()
+
+	// TODO: Should actually parse headers, just getting content length for now
+	var contentLength int
+	reader := bufio.NewReader(connection)
+	for {
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSuffix(line, "\r\n")
+		if len(line) == 0 {
+			break
+		}
+		if strings.HasPrefix(line, "Content-Length: ") {
+			contentLength, _ = strconv.Atoi(line[16:])
+		}
+	}
+
+	// TODO: use copy?
+	data := make([]byte, contentLength)
+	bytesRead, err := connection.Read(data)
+	if err != nil {
+		fmt.Printf("Error reading connection stream: %v\n", err)
+		return 500, "Internal Server Error"
+	}
+	file.Write(data[:bytesRead])
+	fmt.Printf("Received file %s from client (bytes %v)\n", path, bytesRead)
+
+	return 201, "Created"
 }
