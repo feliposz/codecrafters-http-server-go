@@ -75,7 +75,6 @@ func handleConnection(connection net.Conn, directory string) {
 		} else if requestPath == "/" {
 			// do nothing
 		} else if requestPath == "/user-agent" {
-			statusCode, statusMessage = 200, "OK"
 			scanner := bufio.NewScanner(connection)
 			for scanner.Scan() {
 				line := scanner.Text()
@@ -88,24 +87,18 @@ func handleConnection(connection net.Conn, directory string) {
 			responseBody = requestPath[6:]
 		} else if strings.HasPrefix(requestPath, "/files/") {
 			requestFilePath = requestPath[7:]
+			fullFilePath := filepath.Join(directory, requestFilePath)
+			switch requestMethod {
+			case "GET":
+				statusCode, statusMessage = handleFileRequest(connection, fullFilePath)
+				if statusCode == 200 {
+					return
+				}
+			case "POST":
+				statusCode, statusMessage = handleFileUpload(connection, fullFilePath)
+			}
 		} else {
 			statusCode, statusMessage = 404, "Not Found"
-		}
-	}
-
-	if len(requestFilePath) > 0 {
-		fullFilePath := filepath.Join(directory, requestFilePath)
-		switch requestMethod {
-		case "GET":
-			statusCode, statusMessage = handleFileRequest(connection, fullFilePath)
-			if statusCode == 200 {
-				return
-			}
-		case "POST":
-			statusCode, statusMessage = handleFileUpload(connection, fullFilePath)
-			if statusCode == 200 {
-				return
-			}
 		}
 	}
 
