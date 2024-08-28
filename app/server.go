@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"io"
@@ -65,7 +67,7 @@ func handleConnection(connection net.Conn, directory string) {
 	fmt.Printf("Read %d bytes from client\n", bytesRead)
 
 	var statusCode int
-	var statusMessage, responseBody, requestFilePath string
+	var statusMessage, responseBody, requestFilePath, extraHeaders string
 	if requestVersion != "HTTP/1.1" {
 		statusCode, statusMessage = 400, "Bad Request"
 	} else {
@@ -85,6 +87,27 @@ func handleConnection(connection net.Conn, directory string) {
 			}
 		} else if strings.HasPrefix(requestPath, "/echo/") {
 			responseBody = requestPath[6:]
+			scanner := bufio.NewScanner(connection)
+			var acceptEncoding string
+			fmt.Println("processing headers...")
+			for scanner.Scan() {
+				line := scanner.Text()
+				fmt.Println(line)
+				if strings.HasPrefix(line, "Accept-Encoding: ") {
+					acceptEncoding = line[17:]
+				} else if line == "" {
+					break
+				}
+			}
+			fmt.Println("headers processed!")
+			if acceptEncoding == "gzip" {
+				extraHeaders = "Content-Encoding: gzip\r\n"
+				buf := bytes.NewBuffer([]byte{})
+				writer := gzip.NewWriter(buf)
+				writer.Write([]byte(responseBody))
+				writer.Close()
+				responseBody = buf.String()
+			}
 		} else if strings.HasPrefix(requestPath, "/files/") {
 			requestFilePath = requestPath[7:]
 			fullFilePath := filepath.Join(directory, requestFilePath)
@@ -102,8 +125,9 @@ func handleConnection(connection net.Conn, directory string) {
 		}
 	}
 
-	httpResponse := fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n",
-		statusCode, statusMessage, len(responseBody), responseBody)
+	fmt.Println(statusCode, responseBody)
+	httpResponse := fmt.Sprintf("HTTP/1.1 %d %s\r\n%sContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n",
+		statusCode, statusMessage, extraHeaders, len(responseBody), responseBody)
 	bytesSent, err := connection.Write([]byte(httpResponse))
 	if err != nil {
 		fmt.Printf("Error sending response: %v\n", err)
