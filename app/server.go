@@ -88,25 +88,28 @@ func handleConnection(connection net.Conn, directory string) {
 		} else if strings.HasPrefix(requestPath, "/echo/") {
 			responseBody = requestPath[6:]
 			scanner := bufio.NewScanner(connection)
-			var acceptEncoding string
+			var acceptEncodings string
 			fmt.Println("processing headers...")
 			for scanner.Scan() {
 				line := scanner.Text()
 				fmt.Println(line)
 				if strings.HasPrefix(line, "Accept-Encoding: ") {
-					acceptEncoding = line[17:]
+					acceptEncodings = line[17:]
 				} else if line == "" {
 					break
 				}
 			}
 			fmt.Println("headers processed!")
-			if acceptEncoding == "gzip" {
-				extraHeaders = "Content-Encoding: gzip\r\n"
-				buf := bytes.NewBuffer([]byte{})
-				writer := gzip.NewWriter(buf)
-				writer.Write([]byte(responseBody))
-				writer.Close()
-				responseBody = buf.String()
+			for _, acceptEncoding := range strings.Split(acceptEncodings, ",") {
+				if strings.Trim(acceptEncoding, " ") == "gzip" {
+					extraHeaders = "Content-Encoding: gzip\r\n"
+					buf := bytes.NewBuffer([]byte{})
+					writer := gzip.NewWriter(buf)
+					writer.Write([]byte(responseBody))
+					writer.Close()
+					responseBody = buf.String()
+					break
+				}
 			}
 		} else if strings.HasPrefix(requestPath, "/files/") {
 			requestFilePath = requestPath[7:]
